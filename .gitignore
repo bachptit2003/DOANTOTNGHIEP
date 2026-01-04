@@ -1,0 +1,31 @@
+# Build files
+obj/
+bin/
+*.o
+*.a
+*.so
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+backups/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
