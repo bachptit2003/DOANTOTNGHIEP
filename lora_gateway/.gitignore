@@ -1,0 +1,46 @@
+# Build directories
+bin/
+obj/
+*.o
+*.out
+
+# Compiled binary
+gateway
+lora_gateway
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/*.db
+data/backups/
+
+# JSON output
+/tmp/gateway_data.json
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+*~
+
+# Core dumps
+core
+core.*
+
+# Python cache (if using Python scripts)
+__pycache__/
+*.pyc
+*.pyo
