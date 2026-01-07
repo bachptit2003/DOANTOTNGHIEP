@@ -395,8 +395,13 @@ void prepareSensorData() {
         }
     }
     
-    // Soil (always read - analog pin)
-    soil = analogRead(SOIL_PIN);
+    // Soil (always read - analog pin) - Chuyển sang phần trăm
+    int soilRaw = analogRead(SOIL_PIN);
+    // ADC ESP32: 0-4095, cảm biến đất: khô=cao, ướt=thấp
+    // Công thức: soil% = 100 - (raw/4095 * 100)
+    soil = (uint16_t)(100.0 - (soilRaw / 4095.0 * 100.0));
+    // Giới hạn trong khoảng 0-100%
+    if (soil > 100) soil = 100;
     
     // DEBUG: For testing without sensors, use fake values
     if (!dht_available) {
