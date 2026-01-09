@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>LoRa Gateway — Fullpage Node Panels (with Quick Set)</title>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #0e1415;
+            --panel: #0f1919;
+            --card: #122021;
+            --accent: #0fb6a6;
+            --muted: #92a6ad;
+            --value: #6fe6c9;
+            --danger: #ff6b6b;
+            --card-border: rgba(255, 255, 255, 0.03);
+            --glass: rgba(255, 255, 255, 0.02);
+            --radius: 10px;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+            background: var(--bg);
+            color: #dbeff0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Topbar */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 22px;
+            background: linear-gradient(90deg, var(--panel), #0c1a1b);
+            border-bottom: 3px solid var(--accent);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 16px
+        }
+
+        .brand img {
+            height: 100px;
+            width: auto;
+        }
+
+        .status {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 13px;
+            color: var(--muted)
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #c0392b
+        }
+
+        .status-dot.connected {
+            background: #2ecc71
+        }
+
+        /* Page layout */
+        .page {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 18px;
+            padding: 18px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        @media(max-width:1150px) {
+            .page {
+                grid-template-columns: 1fr
+            }
+        }
+
+        /* Middle charts area */
+        .middle-charts {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 18px;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 8px 0 18px 0;
+        }
+
+        .chart-panel {
+            background: linear-gradient(180deg, var(--card), #0e1717);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 10px;
+            width: 48%;
+            min-width: 320px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .chart-header {
+            color: var(--accent);
+            font-weight: 700;
+            margin-bottom: 8px
+        }
+
+        .chart-canvas {
+            height: 320px
+        }
+
+        /* Main column & node card layout */
+        .main-column {
+            display: flex;
+            flex-direction: column;
+            gap: 18px
+        }
+
+        .node-card {
+            background: linear-gradient(180deg, var(--card), #0e1717);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+        }
+
+        .node-header {
+            padding: 14px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .node-title {
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 15px
+        }
+
+        .node-meta {
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        .node-body {
+            padding: 16px;
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 18px
+        }
+
+        @media(max-width:1150px) {
+            .node-body {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .sensors {
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px
+        }
+
+        @media(max-width:820px) {
+            .sensor-grid {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .sensor-box {
+            background: var(--glass);
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            padding: 14px;
+            min-height: 56px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .sensor-label {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px
+        }
+
+        .sensor-value {
+            font-family: "Courier New", monospace;
+            color: var(--value);
+            font-weight: 700;
+            font-size: 18px
+        }
+
+        .sensor-value.alert {
+            color: var(--danger)
+        }
+
+        .threshold-summary {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 6px
+        }
+
+        .signal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        /* controls col */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .mode-row {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .mode-label {
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 600
+        }
+
+        /* Toggle */
+        .toggle {
+            --w: 46px;
+            --h: 26px;
+            --pad: 3px;
+            width: var(--w);
+            height: var(--h);
+            border-radius: 999px;
+            position: relative;
+            display: inline-block;
+            background: #142425;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+        }
+
+        .toggle .knob {
+            width: calc(var(--h) - var(--pad)*2);
+            height: calc(var(--h) - var(--pad)*2);
+            background: #cbd5db;
+            border-radius: 50%;
+            position: absolute;
+            left: var(--pad);
+            top: var(--pad);
+            transition: all .18s ease;
+        }
+
+        .toggle.on {
+            background: linear-gradient(90deg, #0b7f72, var(--accent));
+            border-color: rgba(0, 0, 0, 0.25)
+        }
+
+        .toggle.on .knob {
+            left: calc(var(--w) - var(--h) + var(--pad));
+            background: #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35)
+        }
+
+        .actuators {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap
+        }
+
+        .actuator-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px
+        }
+
+        .all-toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            justify-content: flex-start
+        }
+
+        .thresholds {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            padding: 10px;
+            border-radius: 8px
+        }
+
+        .threshold-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px
+        }
+
+        .threshold-input {
+            padding: 8px;
+            border-radius: 6px;
+            background: #0b1616;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--value);
+            font-family: "Courier New", monospace
+        }
+
+        .btn {
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #04221f;
+            border: none;
+            cursor: pointer;
+            font-weight: 700
+        }
+
+        .btn.alt {
+            background: #2d6a5f;
+            color: #fff
+        }
+
+        .btn.danger {
+            background: var(--danger);
+            color: #fff
+        }
+
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 18px
+        }
+
+        .panel {
+            background: linear-gradient(180deg, var(--card), #0e1717);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            overflow: hidden
+        }
+
+        .panel-header {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            display: flex;
+            align-items: center;
+            justify-content: space-between
+        }
+
+        .panel-title {
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 13px
+        }
+
+        .panel-body {
+            padding: 12px
+        }
+
+        .summary-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            color: var(--muted)
+        }
+
+        .summary-item .val {
+            color: var(--value);
+            font-weight: 700;
+            font-family: "Courier New", monospace
+        }
+
+        .stat-list {
+            display: grid;
+            gap: 8px
+        }
+
+        .log {
+            max-height: 260px;
+            overflow: auto;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-family: "Courier New", monospace;
+            color: var(--muted)
+        }
+
+        .log-entry {
+            font-size: 12px
+        }
+
+        .muted {
+            color: var(--muted)
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted)
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        <div class="brand">
+            <img src="logo.png" alt="Logo">
+            <span>Đồ án tốt nghiệp - Lora Gateway</span>
+        </div>
+        <div class="status">
+            <div id="statusDot" class="status-dot"></div>
+            <div id="statusText" class="small">Connecting...</div>
+        </div>
+    </div>
+
+    <div class="page">
+        <!-- Middle charts area -->
+        <div class="middle-charts" id="middleCharts">
+            <div class="chart-panel">
+                <div class="chart-header">Node 1 — Multi Sensor (Live)</div>
+                <div><canvas id="middleChart1" class="chart-canvas"></canvas></div>
+            </div>
+            <div class="chart-panel">
+                <div class="chart-header">Node 2 — Multi Sensor (Live)</div>
+                <div><canvas id="middleChart2" class="chart-canvas"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Main column (left) -->
+        <div class="main-column" id="mainColumn"></div>
+
+        <!-- Sidebar (right) -->
+        <div class="sidebar">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Summary</div>
+                    <div class="small">Recent</div>
+                </div>
+                <div class="panel-body">
+                    <div id="summaryList" class="summary-list"></div>
+                    <div style="height:10px"></div>
+                    <button id="refreshBtn" class="btn">REFRESH</button>
+                </div>
+            </div>
+
+            <!-- Quick Set panel (new) -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Quick Set Threshold</div>
+                </div>
+                <div class="panel-body">
+                    <div style="display:grid;gap:8px">
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <label class="small muted" style="width:60px">Node</label>
+                            <select id="quickNode"
+                                style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </div>
+
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <label class="small muted" style="width:60px">Sensor</label>
+                            <select id="quickSensor"
+                                style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                                <option value="temp">Temperature</option>
+                                <option value="light">Light</option>
+                                <option value="soil">Soil</option>
+                            </select>
+                        </div>
+
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <label class="small muted" style="width:60px">Min</label>
+                            <input id="quickMin" type="number" step="0.1" placeholder="Min"
+                                style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                        </div>
+
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <label class="small muted" style="width:60px">Max</label>
+                            <input id="quickMax" type="number" step="0.1" placeholder="Max"
+                                style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                        </div>
+
+                        <div style="display:flex;gap:8px">
+                            <button class="btn" onclick="quickSendSet()">Send set & save</button>
+                            <button class="btn alt" onclick="quickSendOnly()">Send only</button>
+                        </div>
+
+                        <div class="small muted">Example command that will be sent: <span id="quickPreview"
+                                style="color:var(--value)"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Controls</div>
+                </div>
+                <div class="panel-body" id="sidebarControls"></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Gateway Statistics</div>
+                </div>
+                <div class="panel-body" id="gatewayStats"></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Activity Log</div>
+                </div>
+                <div class="panel-body">
+                    <div id="logContainer" class="log"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thêm sau panel Quick Set -->
+    <div class="panel">
+        <div class="panel-header">
+            <div class="panel-title">Database Query</div>
+        </div>
+        <div class="panel-body">
+            <div style="display:grid;gap:8px">
+                <!-- Query Type -->
+                <div style="display:flex;gap:8px;align-items:center">
+                    <label class="small muted" style="width:60px">Type</label>
+                    <select id="dbQueryType"
+                        style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                        <option value="get_latest">Latest Records</option>
+                        <option value="get_range">Time Range</option>
+                        <option value="get_aggregate">Statistics</option>
+                        <option value="get_actuator_history">Actuator History</option>
+                    </select>
+                </div>
+
+                <!-- Node Selection -->
+                <div style="display:flex;gap:8px;align-items:center">
+                    <label class="small muted" style="width:60px">Node</label>
+                    <select id="dbQueryNode"
+                        style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                        <option value="1">Node 1</option>
+                        <option value="2">Node 2</option>
+                    </select>
+                </div>
+
+                <!-- Parameters (dynamically shown) -->
+                <div id="dbQueryParams" style="display:flex;gap:8px;align-items:center">
+                    <label class="small muted" style="width:60px">Limit</label>
+                    <input id="dbQueryLimit" type="number" value="20"
+                        style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+                </div>
+
+                <button class="btn" onclick="executeDbQuery()">Query Database</button>
+
+                <div class="small muted" style="margin-top:4px">Status: <span id="dbQueryStatus"
+                        style="color:var(--value)">Ready</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Display Panel -->
+    <div class="panel" id="dbResultsPanel" style="display:none">
+        <div class="panel-header">
+            <div class="panel-title">Query Results</div>
+            <button class="btn danger" onclick="closeDbResults()" style="padding:4px 8px;font-size:11px">CLOSE</button>
+        </div>
+        <div class="panel-body">
+            <div id="dbResultsContainer" style="max-height:400px;overflow:auto;font-size:12px"></div>
+        </div>
+    </div>
+
+    <script>
+        /* ========================
+           Config & State
+           ======================== */
+        const MQTT_CONFIG = {
+            broker: 'ws://192.168.1.88:9001',
+            options: { clientId: 'web_full_v4_' + Math.random().toString(16).slice(2), clean: true, reconnectPeriod: 1000 }
+        };
+        const TOPICS = {
+            nodes: 'lora/gateway/nodes/#',
+            stats: 'lora/gateway/stats',
+            status: 'lora/gateway/status',
+            control: 'lora/gateway/command'
+        };
+
+        const SENSOR_KEYS = ['temperature', 'humidity', 'light', 'soil_moisture'];
+        const SENSOR_LABELS = {
+            temperature: { label: 'TEMPERATURE', unit: '°C' },
+            humidity: { label: 'HUMIDITY', unit: '%' },
+            light: { label: 'LIGHT', unit: 'lux' },
+            soil_moisture: { label: 'SOIL', unit: '%' }
+        };
+
+        let mqttClient = null;
+        let nodes = { node1: null, node2: null };
+        let chartData = {
+            node1: { timestamps: [], temperature: [], humidity: [], light: [], soil_moisture: [] },
+            node2: { timestamps: [], temperature: [], humidity: [], light: [], soil_moisture: [] }
+        };
+        let charts = { middle1: null, middle2: null };
+        let activityLog = [];
+        const MAX_POINTS = 60;
+
+        /* Threshold persistence */
+        const THRESH_KEY = 'lora_thresholds_v4';
+        const defaultThresholds = {
+            temp: { min: 20, max: 28 },
+            light: { min: 200, max: 800 },
+            soil: { min: 1500, max: 3000 }
+        };
+        let thresholds = loadThresholds();
+
+        /* ========================
+           Render & layout functions
+           ======================== */
+        function createNodeCard(nodeId, idx) {
+            return `
+  <div class="node-card" id="${nodeId}-card">
+    <div class="node-header">
+      <div class="node-title">Node ${idx}</div>
+      <div class="node-meta"><span id="${nodeId}-age">-- s</span></div>
+    </div>
+    <div class="node-body">
+      <div class="sensors">
+        <div class="sensor-grid">
+          <div class="sensor-box">
+            <div class="sensor-label">${SENSOR_LABELS.temperature.label}</div>
+            <div id="${nodeId}-temperature" class="sensor-value">--</div>
+            <div id="${nodeId}-temp-thr" class="threshold-summary"></div>
+          </div>
+          <div class="sensor-box">
+            <div class="sensor-label">${SENSOR_LABELS.humidity.label}</div>
+            <div id="${nodeId}-humidity" class="sensor-value">--</div>
+            <div id="${nodeId}-humidity-thr" class="threshold-summary"></div>
+          </div>
+          <div class="sensor-box">
+            <div class="sensor-label">${SENSOR_LABELS.light.label}</div>
+            <div id="${nodeId}-light" class="sensor-value">--</div>
+            <div id="${nodeId}-light-thr" class="threshold-summary"></div>
+          </div>
+          <div class="sensor-box">
+            <div class="sensor-label">${SENSOR_LABELS.soil_moisture.label}</div>
+            <div id="${nodeId}-soil_moisture" class="sensor-value">--</div>
+            <div id="${nodeId}-soil-thr" class="threshold-summary"></div>
+          </div>
+        </div>
+
+        <div class="signal-row">
+          <div>RSSI <span id="${nodeId}-rssi" class="muted">--</span></div>
+          <div>SNR <span id="${nodeId}-snr" class="muted">--</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="mode-row">
+          <div class="mode-label">Auto Mode</div>
+          <div id="${nodeId}-auto-toggle" class="toggle" onclick="uiToggleMode('${nodeId}')"><div class="knob"></div></div>
+        </div>
+
+        <div class="all-toggle-row">
+          <div class="mode-label">All Control</div>
+          <div id="${nodeId}-all-toggle" class="toggle" onclick="uiToggleAll('${nodeId}')"><div class="knob"></div></div>
+        </div>
+
+        <div>
+          <div class="control-label small muted">Actuators</div>
+          <div class="actuators">
+            <div class="actuator-col"><div class="small muted">FAN</div><div id="${nodeId}-fan-toggle" class="toggle" onclick="uiToggleActuator('${nodeId}','fan')"><div class="knob"></div></div></div>
+            <div class="actuator-col"><div class="small muted">LIGHT</div><div id="${nodeId}-light-toggle" class="toggle" onclick="uiToggleActuator('${nodeId}','light')"><div class="knob"></div></div></div>
+            <div class="actuator-col"><div class="small muted">PUMP</div><div id="${nodeId}-pump-toggle" class="toggle" onclick="uiToggleActuator('${nodeId}','pump')"><div class="knob"></div></div></div>
+          </div>
+        </div>
+
+        <div class="thresholds" id="${nodeId}-threshold" style="display:none">
+          <div class="small muted" style="margin-bottom:6px">Thresholds (Auto mode)</div>
+          <div class="threshold-row">
+            <input class="threshold-input" id="${nodeId}-temp-min" placeholder="Temp min" type="number" step="0.1">
+            <input class="threshold-input" id="${nodeId}-temp-max" placeholder="Temp max" type="number" step="0.1">
+            <div style="display:flex;gap:6px">
+              <button class="btn" onclick="setThreshold('${nodeId}','temp')">SET</button>
+              <button class="btn alt" onclick="sendThreshold('${nodeId}','temp')">SEND</button>
+            </div>
+          </div>
+          <div class="threshold-row">
+            <input class="threshold-input" id="${nodeId}-light-min" placeholder="Light min" type="number" step="1">
+            <input class="threshold-input" id="${nodeId}-light-max" placeholder="Light max" type="number" step="1">
+            <div style="display:flex;gap:6px">
+              <button class="btn" onclick="setThreshold('${nodeId}','light')">SET</button>
+              <button class="btn alt" onclick="sendThreshold('${nodeId}','light')">SEND</button>
+            </div>
+          </div>
+          <div class="threshold-row">
+            <input class="threshold-input" id="${nodeId}-soil-min" placeholder="Soil min" type="number" step="1">
+            <input class="threshold-input" id="${nodeId}-soil-max" placeholder="Soil max" type="number" step="1">
+            <div style="display:flex;gap:6px">
+              <button class="btn" onclick="setThreshold('${nodeId}','soil')">SET</button>
+              <button class="btn alt" onclick="sendThreshold('${nodeId}','soil')">SEND</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  `;
+        }
+
+        function renderAll() {
+            document.getElementById('mainColumn').innerHTML = createNodeCard('node1', 1) + createNodeCard('node2', 2);
+            populateThresholdInputs('node1');
+            populateThresholdInputs('node2');
+
+            const summary = [
+                ['3 days ago', '202.6 L'],
+                ['3 Days ago', '0 L'],
+                ['2 days ago', '0 L'],
+                ['Yesterday', '202.6 L'],
+                ['Today > 5min', '120.9 L'],
+                ['Last Hour', '37.2 L']
+            ].map(item => `<div class="summary-item"><div>${item[0]}</div><div class="val">${item[1]}</div></div>`).join('');
+            document.getElementById('summaryList').innerHTML = summary;
+
+            document.getElementById('sidebarControls').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="small muted">NODE 1 AUTO</div>
+      <div id="quick-node1-auto" class="toggle" onclick="uiToggleMode('node1')"><div class="knob"></div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <div class="small muted">NODE 2 AUTO</div>
+      <div id="quick-node2-auto" class="toggle" onclick="uiToggleMode('node2')"><div class="knob"></div></div>
+    </div>
+  `;
+
+            const stats = [
+                ['RX No Data', 'statRxNoData'],
+                ['CRC Errors', 'statCrcError'],
+                ['JSON Errors', 'statJsonError'],
+                ['Auto Commands', 'statAutoCmd'],
+                ['MQTT Publish', 'statMqttPub']
+            ].map(s => `<div class="summary-item"><div class="small muted">${s[0]}</div><div id="${s[1]}" class="val">0</div></div>`).join('');
+            document.getElementById('gatewayStats').innerHTML = stats;
+        }
+
+        /* ========================
+           Threshold helpers
+           ======================== */
+        function loadThresholds() {
+            try {
+                const raw = localStorage.getItem(THRESH_KEY);
+                if (!raw) {
+                    return { node1: structuredClone(defaultThresholds), node2: structuredClone(defaultThresholds) };
+                }
+                const parsed = JSON.parse(raw);
+                return {
+                    node1: parsed.node1 || structuredClone(defaultThresholds),
+                    node2: parsed.node2 || structuredClone(defaultThresholds)
+                };
+            } catch (e) {
+                return { node1: structuredClone(defaultThresholds), node2: structuredClone(defaultThresholds) };
+            }
+        }
+        function saveThresholds() {
+            try { localStorage.setItem(THRESH_KEY, JSON.stringify(thresholds)); } catch (e) { console.warn('save threshold error', e); }
+        }
+        function populateThresholdInputs(nodeId) {
+            const thr = thresholds[nodeId] || structuredClone(defaultThresholds);
+            const tempMin = document.getElementById(`${nodeId}-temp-min`);
+            const tempMax = document.getElementById(`${nodeId}-temp-max`);
+            const lightMin = document.getElementById(`${nodeId}-light-min`);
+            const lightMax = document.getElementById(`${nodeId}-light-max`);
+            const soilMin = document.getElementById(`${nodeId}-soil-min`);
+            const soilMax = document.getElementById(`${nodeId}-soil-max`);
+            if (tempMin) tempMin.value = thr.temp.min;
+            if (tempMax) tempMax.value = thr.temp.max;
+            if (lightMin) lightMin.value = thr.light.min;
+            if (lightMax) lightMax.value = thr.light.max;
+            if (soilMin) soilMin.value = thr.soil.min;
+            if (soilMax) soilMax.value = thr.soil.max;
+            applyThresholdSummary(nodeId);
+        }
+        function applyThresholdSummary(nodeId) {
+            const thr = thresholds[nodeId] || structuredClone(defaultThresholds);
+            const tempSummary = document.getElementById(`${nodeId}-temp-thr`);
+            const lightSummary = document.getElementById(`${nodeId}-light-thr`);
+            const soilSummary = document.getElementById(`${nodeId}-soil-thr`);
+            const humiditySummary = document.getElementById(`${nodeId}-humidity-thr`);
+            if (tempSummary) tempSummary.textContent = `Threshold: ${thr.temp.min} — ${thr.temp.max} °C`;
+            if (lightSummary) lightSummary.textContent = `Threshold: ${thr.light.min} — ${thr.light.max} lux`;
+            if (soilSummary) soilSummary.textContent = `Threshold: ${thr.soil.min} — ${thr.soil.max}`;
+            if (humiditySummary) humiditySummary.textContent = '';
+        }
+
+        /* ========================
+           UI toggles & actions
+           ======================== */
+        function setToggleEl(el, on) {
+            if (!el) return;
+            if (on) el.classList.add('on'); else el.classList.remove('on');
+        }
+        function uiToggleActuator(nodeId, actuator) {
+            const el = document.getElementById(`${nodeId}-${actuator}-toggle`);
+            const newState = !el.classList.contains('on');
+            setToggleEl(el, newState);
+            const nodeNum = nodeId.replace('node', '');
+            const cmd = `${actuator} ${nodeNum} ${newState ? 'on' : 'off'}`;
+            publishCommand(cmd);
+            addLog(`[UI] ${cmd}`);
+        }
+        function uiToggleMode(nodeId) {
+            const el = document.getElementById(`${nodeId}-auto-toggle`);
+            const newState = !el.classList.contains('on');
+            setToggleEl(el, newState);
+            const thr = document.getElementById(`${nodeId}-threshold`);
+            if (thr) thr.style.display = newState ? 'block' : 'none';
+            const quick = document.getElementById(`quick-${nodeId}-auto`);
+            if (quick) setToggleEl(quick, newState);
+            const nodeNum = nodeId.replace('node', '');
+            const cmd = `auto ${nodeNum} ${newState ? 'on' : 'off'}`;
+            publishCommand(cmd);
+            addLog(`[UI] ${cmd}`);
+        }
+        function uiToggleAll(nodeId) {
+            const el = document.getElementById(`${nodeId}-all-toggle`);
+            const newState = !el.classList.contains('on');
+            setToggleEl(el, newState);
+            ['fan', 'light', 'pump'].forEach(a => setToggleEl(document.getElementById(`${nodeId}-${a}-toggle`), newState));
+            const nodeNum = nodeId.replace('node', '');
+            const cmd = `all ${nodeNum} ${newState ? 'on' : 'off'}`;
+            publishCommand(cmd);
+            addLog(`[UI] ${cmd}`);
+        }
+
+        /* setThreshold = save locally + publish
+           sendThreshold = publish only (do not persist) */
+        function setThreshold(nodeId, type) {
+            const nodeNum = nodeId.replace('node', '');
+            const minEl = document.getElementById(`${nodeId}-${type}-min`);
+            const maxEl = document.getElementById(`${nodeId}-${type}-max`);
+            const min = parseFloat(minEl.value);
+            const max = parseFloat(maxEl.value);
+            if (isNaN(min) || isNaN(max) || min >= max) { addLog('Invalid threshold values'); return; }
+            if (!thresholds[nodeId]) thresholds[nodeId] = structuredClone(defaultThresholds);
+            if (type === 'temp') thresholds[nodeId].temp = { min, max };
+            if (type === 'light') thresholds[nodeId].light = { min, max };
+            if (type === 'soil') thresholds[nodeId].soil = { min, max };
+            saveThresholds();
+            applyThresholdSummary(nodeId);
+            const cmd = `set${type} ${nodeNum} ${min} ${max}`;
+            publishCommand(cmd);
+            addLog(`[UI] ${cmd} (saved)`);
+        }
+
+        function sendThreshold(nodeId, type) {
+            const nodeNum = nodeId.replace('node', '');
+            const minEl = document.getElementById(`${nodeId}-${type}-min`);
+            const maxEl = document.getElementById(`${nodeId}-${type}-max`);
+            const min = parseFloat(minEl.value);
+            const max = parseFloat(maxEl.value);
+            if (isNaN(min) || isNaN(max) || min >= max) { addLog('Invalid threshold values'); return; }
+            // publish only
+            const cmd = `set${type} ${nodeNum} ${min} ${max}`;
+            publishCommand(cmd);
+            addLog(`[UI] ${cmd} (sent only)`);
+        }
+
+        /* Quick set helpers (sidebar)
+           - quickSendSet: save locally + publish (same as setThreshold but from quick panel)
+           - quickSendOnly: publish only without saving
+        */
+        function quickSendSet() {
+            const node = document.getElementById('quickNode').value;
+            const sensor = document.getElementById('quickSensor').value; // 'temp'|'light'|'soil'
+            const min = parseFloat(document.getElementById('quickMin').value);
+            const max = parseFloat(document.getElementById('quickMax').value);
+            if (isNaN(min) || isNaN(max) || min >= max) { addLog('Quick set: Invalid values'); return; }
+            const nodeId = 'node' + node;
+            // persist to thresholds for that node
+            if (!thresholds[nodeId]) thresholds[nodeId] = structuredClone(defaultThresholds);
+            if (sensor === 'temp') thresholds[nodeId].temp = { min, max };
+            if (sensor === 'light') thresholds[nodeId].light = { min, max };
+            if (sensor === 'soil') thresholds[nodeId].soil = { min, max };
+            saveThresholds();
+            populateThresholdInputs(nodeId); // update inputs
+            const cmd = `set${sensor} ${node} ${min} ${max}`;
+            publishCommand(cmd);
+            addLog(`[Quick] ${cmd} (saved & sent)`);
+            document.getElementById('quickPreview').textContent = cmd;
+        }
+
+        function quickSendOnly() {
+            const node = document.getElementById('quickNode').value;
+            const sensor = document.getElementById('quickSensor').value;
+            const min = parseFloat(document.getElementById('quickMin').value);
+            const max = parseFloat(document.getElementById('quickMax').value);
+            if (isNaN(min) || isNaN(max) || min >= max) { addLog('Quick send: Invalid values'); return; }
+            const cmd = `set${sensor} ${node} ${min} ${max}`;
+            publishCommand(cmd);
+            addLog(`[Quick] ${cmd} (sent only)`);
+            document.getElementById('quickPreview').textContent = cmd;
+        }
+
+        /* ========================
+           MQTT
+           ======================== */
+        function connectMQTT() {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            addLog('Connecting MQTT...');
+            mqttClient = mqtt.connect(MQTT_CONFIG.broker, MQTT_CONFIG.options);
+
+            mqttClient.on('connect', () => {
+                addLog('MQTT connected');
+                statusDot.classList.add('connected'); statusText.textContent = 'Connected';
+                mqttClient.subscribe(TOPICS.nodes);
+                mqttClient.subscribe(TOPICS.stats);
+                mqttClient.subscribe(TOPICS.status);
+                mqttClient.subscribe('lora/gateway/db/response');
+            });
+
+            mqttClient.on('message', (topic, msg) => {
+                try {
+                    const payload = msg.toString();
+
+                    //  Xử lý Database Response
+                    if (topic === 'lora/gateway/db/response') {
+                        handleDbResponse(JSON.parse(payload));
+                        return;
+                    }
+                    if (topic.startsWith('lora/gateway/nodes/')) {
+                        const nodeId = topic.split('/').pop();
+                        const data = JSON.parse(payload);
+                        nodes[nodeId] = data;
+                        updateNodeUI(nodeId, data);
+                        addSensorToCharts(nodeId, data);
+                        addLog(`[${nodeId}] T:${data.sensors.temperature.toFixed(1)} H:${data.sensors.humidity.toFixed(1)}`);
+                    } else if (topic === TOPICS.stats) {
+                        updateGatewayStats(JSON.parse(payload));
+                    } else if (topic === TOPICS.status) {
+                        addLog(`[Gateway] ${payload}`);
+                    }
+                } catch (e) { console.error(e); }
+            });
+
+            mqttClient.on('error', err => { addLog('MQTT error: ' + err); statusDot.classList.remove('connected'); statusText.textContent = 'Error'; });
+            mqttClient.on('close', () => { addLog('MQTT closed'); statusDot.classList.remove('connected'); statusText.textContent = 'Disconnected'; });
+        }
+
+        function publishCommand(cmd) {
+            if (!mqttClient || !mqttClient.connected) { addLog('MQTT not connected'); return; }
+            mqttClient.publish(TOPICS.control, cmd, { qos: 1 }, err => { if (err) addLog('Publish error'); });
+        }
+
+        /* ========================
+           Update UI with data
+           ======================== */
+        function updateNodeUI(nodeId, data) {
+            const tempEl = document.getElementById(`${nodeId}-temperature`);
+            const humEl = document.getElementById(`${nodeId}-humidity`);
+            const lightEl = document.getElementById(`${nodeId}-light`);
+            const soilEl = document.getElementById(`${nodeId}-soil_moisture`);
+
+            tempEl.textContent = `${data.sensors.temperature.toFixed(1)} ${SENSOR_LABELS.temperature.unit}`;
+            humEl.textContent = `${data.sensors.humidity.toFixed(1)} ${SENSOR_LABELS.humidity.unit}`;
+            lightEl.textContent = `${data.sensors.light} ${SENSOR_LABELS.light.unit}`;
+            soilEl.textContent = `${data.sensors.soil_moisture} ${SENSOR_LABELS.soil_moisture.unit}`;
+
+            const thr = thresholds[nodeId] || structuredClone(defaultThresholds);
+            tempEl.classList.toggle('alert', data.sensors.temperature < thr.temp.min || data.sensors.temperature > thr.temp.max);
+            lightEl.classList.toggle('alert', data.sensors.light < thr.light.min || data.sensors.light > thr.light.max);
+            soilEl.classList.toggle('alert', data.sensors.soil_moisture < thr.soil.min || data.sensors.soil_moisture > thr.soil.max);
+
+            document.getElementById(`${nodeId}-rssi`).textContent = data.signal?.rssi ?? '--';
+            document.getElementById(`${nodeId}-snr`).textContent = data.signal?.snr ?? '--';
+
+            const age = Math.floor((Date.now() - data.timestamp * 1000) / 1000);
+            document.getElementById(`${nodeId}-age`).textContent = `${age} s`;
+
+            setToggleEl(document.getElementById(`${nodeId}-fan-toggle`), !!data.actuators?.fan);
+            setToggleEl(document.getElementById(`${nodeId}-light-toggle`), !!data.actuators?.light);
+            setToggleEl(document.getElementById(`${nodeId}-pump-toggle`), !!data.actuators?.pump);
+            setToggleEl(document.getElementById(`${nodeId}-auto-toggle`), !!data.auto_mode);
+            const thrEl = document.getElementById(`${nodeId}-threshold`);
+            if (thrEl) thrEl.style.display = data.auto_mode ? 'block' : 'none';
+            const quick = document.getElementById(`quick-${nodeId}-auto`);
+            if (quick) setToggleEl(quick, !!data.auto_mode);
+
+            applyThresholdSummary(nodeId);
+        }
+
+        /* ========================
+           Charts: middle large only (bottom charts removed)
+           ======================== */
+        function addSensorToCharts(nodeId, data) {
+            const ts = new Date(data.timestamp * 1000).toLocaleTimeString();
+            const c = chartData[nodeId];
+            c.timestamps.push(ts);
+            c.temperature.push(data.sensors.temperature);
+            c.humidity.push(data.sensors.humidity);
+            c.light.push(data.sensors.light);
+            c.soil_moisture.push(data.sensors.soil_moisture);
+            if (c.timestamps.length > MAX_POINTS) {
+                c.timestamps.shift();
+                SENSOR_KEYS.forEach(k => c[k].shift());
+            }
+            refreshCharts(nodeId);
+        }
+
+        function makeConfig(nodeId) {
+            return {
+                type: 'line',
+                data: {
+                    labels: chartData[nodeId].timestamps,
+                    datasets: [
+                        { label: 'Temperature (°C)', data: chartData[nodeId].temperature, borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,0.06)', tension: 0.25, pointRadius: 1, yAxisID: 'y1' },
+                        { label: 'Humidity (%)', data: chartData[nodeId].humidity, borderColor: '#4ecdc4', backgroundColor: 'rgba(78,205,196,0.04)', tension: 0.25, pointRadius: 1, yAxisID: 'y2' },
+                        { label: 'Light (lux)', data: chartData[nodeId].light, borderColor: '#ffe66d', backgroundColor: 'rgba(255,230,109,0.04)', tension: 0.25, pointRadius: 1, yAxisID: 'y3' },
+                        { label: 'Soil (ADC)', data: chartData[nodeId].soil_moisture, borderColor: '#95e1d3', backgroundColor: 'rgba(149,225,211,0.04)', tension: 0.25, pointRadius: 1, yAxisID: 'y4' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { labels: { color: '#cfe6e8', boxWidth: 12 } } },
+                    scales: {
+                        x: { ticks: { color: '#97a6b2' }, grid: { color: 'rgba(255,255,255,0.02)' } },
+                        y1: { type: 'linear', position: 'left', ticks: { color: '#ff6b6b' } },
+                        y2: { type: 'linear', position: 'right', ticks: { color: '#4ecdc4' }, grid: { drawOnChartArea: false } },
+                        y3: { type: 'linear', position: 'left', ticks: { color: '#ffe66d' }, grid: { drawOnChartArea: false } },
+                        y4: { type: 'linear', position: 'right', ticks: { color: '#95e1d3' }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            };
+        }
+
+        function createCharts() {
+            charts.middle1 = new Chart(document.getElementById('middleChart1').getContext('2d'), makeConfig('node1'));
+            charts.middle2 = new Chart(document.getElementById('middleChart2').getContext('2d'), makeConfig('node2'));
+        }
+
+        function refreshCharts(nodeId) {
+            const d = chartData[nodeId];
+            const ch = nodeId === 'node1' ? charts.middle1 : charts.middle2;
+            if (ch) {
+                ch.data.labels = d.timestamps.slice();
+                ch.data.datasets.forEach((ds, i) => ds.data = d[['temperature', 'humidity', 'light', 'soil_moisture'][i]].slice());
+                ch.update('none');
+            }
+        }
+
+        /* ========================
+           Gateway stats & log
+           ======================== */
+        function updateGatewayStats(stats) {
+            document.getElementById('statRxNoData').textContent = stats.rx_nodata || 0;
+            document.getElementById('statCrcError').textContent = stats.rx_crc_error || 0;
+            document.getElementById('statJsonError').textContent = stats.json_parse_error || 0;
+            document.getElementById('statAutoCmd').textContent = stats.auto_commands || 0;
+            document.getElementById('statMqttPub').textContent = stats.mqtt_publish_count || 0;
+        }
+
+        function addLog(msg) {
+            const t = new Date().toLocaleTimeString();
+            activityLog.unshift(`[${t}] ${msg}`);
+            if (activityLog.length > 300) activityLog.pop();
+            document.getElementById('logContainer').innerHTML = activityLog.map(l => `<div class="log-entry">${l}</div>`).join('');
+        }
+
+        /* ========================
+           Init & wiring
+           ======================== */
+        renderAll();
+        createCharts();
+        connectMQTT();
+        addLog('Dashboard initialized (v4)');
+
+        document.getElementById('refreshBtn').addEventListener('click', () => addLog('Manual refresh clicked'));
+
+        // age updater
+        setInterval(() => {
+            ['node1', 'node2'].forEach(n => {
+                const data = nodes[n];
+                if (!data) return;
+                const age = Math.floor((Date.now() - data.timestamp * 1000) / 1000);
+                const el = document.getElementById(`${n}-age`);
+                if (el) el.textContent = `${age} s`;
+            });
+        }, 1000);
+
+        window.addEventListener('beforeunload', () => { if (mqttClient) mqttClient.end(); });
+
+        /* ========================
+           DATABASE QUERY FUNCTIONS
+           ======================== */
+
+        // Update UI khi đổi query type
+        document.getElementById('dbQueryType')?.addEventListener('change', (e) => {
+            const type = e.target.value;
+            const paramsDiv = document.getElementById('dbQueryParams');
+
+            if (type === 'get_latest' || type === 'get_actuator_history') {
+                paramsDiv.innerHTML = `
+      <label class="small muted" style="width:60px">Limit</label>
+      <input id="dbQueryLimit" type="number" value="20" style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+    `;
+            } else if (type === 'get_range' || type === 'get_aggregate') {
+                paramsDiv.innerHTML = `
+      <label class="small muted" style="width:60px">Hours</label>
+      <input id="dbQueryHours" type="number" value="24" style="flex:1;padding:8px;border-radius:6px;background:#0b1616;border:1px solid rgba(255,255,255,0.03);color:var(--value)">
+    `;
+            }
+        });
+
+        function executeDbQuery() {
+            const type = document.getElementById('dbQueryType').value;
+            const node = document.getElementById('dbQueryNode').value;
+            const statusEl = document.getElementById('dbQueryStatus');
+
+            let request = {
+                action: type,
+                node_id: parseInt(node),
+                request_id: 'web_' + Date.now()
+            };
+
+            // Thêm parameters tùy type
+            if (type === 'get_latest' || type === 'get_actuator_history') {
+                const limit = document.getElementById('dbQueryLimit')?.value || 20;
+                request.limit = parseInt(limit);
+            } else if (type === 'get_range' || type === 'get_aggregate') {
+                const hours = document.getElementById('dbQueryHours')?.value || 24;
+                request.hours = parseInt(hours);
+            }
+
+            statusEl.textContent = 'Querying...';
+            statusEl.style.color = '#ffe66d';
+
+            // Publish query request
+            if (!mqttClient || !mqttClient.connected) {
+                statusEl.textContent = 'MQTT not connected';
+                statusEl.style.color = 'var(--danger)';
+                return;
+            }
+
+            mqttClient.publish('lora/gateway/db/query', JSON.stringify(request), { qos: 1 });
+            addLog(`[DB] Query sent: ${type} (Node ${node})`);
+        }
+
+        function handleDbResponse(response) {
+            const statusEl = document.getElementById('dbQueryStatus');
+            const resultsPanel = document.getElementById('dbResultsPanel');
+            const resultsContainer = document.getElementById('dbResultsContainer');
+
+            if (!response.success) {
+                statusEl.textContent = 'Error: ' + (response.error || 'Unknown error');
+                statusEl.style.color = 'var(--danger)';
+                addLog(`[DB] Query failed: ${response.error}`);
+                return;
+            }
+
+            statusEl.textContent = 'Success';
+            statusEl.style.color = '#2ecc71';
+
+            // Hiển thị results
+            resultsPanel.style.display = 'block';
+
+            const action = response.action;
+            const data = response.data;
+
+            let html = '';
+
+            if (action === 'get_latest') {
+                html = renderLatestData(data);
+            } else if (action === 'get_range') {
+                html = renderRangeData(data);
+            } else if (action === 'get_aggregate') {
+                html = renderAggregateData(data);
+            } else if (action === 'get_actuator_history') {
+                html = renderActuatorHistory(data);
+            }
+
+            resultsContainer.innerHTML = html;
+            addLog(`[DB] Query success: ${data.length || 'N/A'} records`);
+        }
+
+        function renderLatestData(data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                return '<div class="muted">No data found</div>';
+            }
+
+            let html = '<table style="width:100%;border-collapse:collapse;font-family:monospace">';
+            html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--muted)">';
+            html += '<th style="padding:6px;text-align:left">Date</th>';
+            html += '<th style="padding:6px;text-align:left">Time</th>';
+            html += '<th style="padding:6px;text-align:right">Temp</th>';
+            html += '<th style="padding:6px;text-align:right">Hum</th>';
+            html += '<th style="padding:6px;text-align:right">Light</th>';
+            html += '<th style="padding:6px;text-align:right">Soil</th>';
+            html += '<th style="padding:6px;text-align:right">RSSI</th>';
+            html += '</tr>';
+
+            data.forEach(row => {
+                const timeParts = row.time.split(' ');
+                const dateStr = timeParts[0] || '--';
+                const timeStr = timeParts[1] || '--';
+
+                html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">';
+                html += `<td style="padding:6px;color:var(--muted)">${dateStr}</td>`;
+                html += `<td style="padding:6px;color:var(--muted)">${timeStr}</td>`;
+                html += `<td style="padding:6px;text-align:right;color:var(--value)">${row.temperature.toFixed(1)}°C</td>`;
+                html += `<td style="padding:6px;text-align:right;color:var(--value)">${row.humidity.toFixed(1)}%</td>`;
+                html += `<td style="padding:6px;text-align:right;color:var(--value)">${row.light}</td>`;
+                html += `<td style="padding:6px;text-align:right;color:var(--value)">${row.soil_moisture}</td>`;
+                html += `<td style="padding:6px;text-align:right;color:var(--muted)">${row.rssi}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</table>';
+            return html;
+        }
+
+        function renderRangeData(data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                return '<div class="muted">No data found</div>';
+            }
+
+            // Tương tự renderLatestData nhưng có thể thêm chart
+            return renderLatestData(data) + `<div class="muted" style="margin-top:8px">${data.length} records found</div>`;
+        }
+
+        function renderAggregateData(data) {
+            if (!data) return '<div class="muted">No data</div>';
+
+            let html = '<div style="display:grid;gap:12px">';
+
+            // Temperature stats
+            html += '<div style="background:rgba(255,107,107,0.1);padding:12px;border-radius:6px;border-left:3px solid #ff6b6b">';
+            html += '<div style="color:#ff6b6b;font-weight:700;margin-bottom:6px">TEMPERATURE</div>';
+            html += `<div>Avg: <span style="color:var(--value)">${data.avg_temp?.toFixed(1) || '--'}°C</span></div>`;
+            html += `<div>Min: <span style="color:var(--value)">${data.min_temp?.toFixed(1) || '--'}°C</span> | `;
+            html += `Max: <span style="color:var(--value)">${data.max_temp?.toFixed(1) || '--'}°C</span></div>`;
+            html += '</div>';
+
+            // Humidity stats
+            html += '<div style="background:rgba(78,205,196,0.1);padding:12px;border-radius:6px;border-left:3px solid #4ecdc4">';
+            html += '<div style="color:#4ecdc4;font-weight:700;margin-bottom:6px">HUMIDITY</div>';
+            html += `<div>Avg: <span style="color:var(--value)">${data.avg_hum?.toFixed(1) || '--'}%</span></div>`;
+            html += `<div>Min: <span style="color:var(--value)">${data.min_hum?.toFixed(1) || '--'}%</span> | `;
+            html += `Max: <span style="color:var(--value)">${data.max_hum?.toFixed(1) || '--'}%</span></div>`;
+            html += '</div>';
+
+            // Light stats
+            html += '<div style="background:rgba(255,230,109,0.1);padding:12px;border-radius:6px;border-left:3px solid #ffe66d">';
+            html += '<div style="color:#ffe66d;font-weight:700;margin-bottom:6px">LIGHT</div>';
+            html += `<div>Avg: <span style="color:var(--value)">${data.avg_light?.toFixed(0) || '--'} lux</span></div>`;
+            html += `<div>Min: <span style="color:var(--value)">${data.min_light || '--'}</span> | `;
+            html += `Max: <span style="color:var(--value)">${data.max_light || '--'}</span></div>`;
+            html += '</div>';
+
+            // Soil stats
+            html += '<div style="background:rgba(149,225,211,0.1);padding:12px;border-radius:6px;border-left:3px solid #95e1d3">';
+            html += '<div style="color:#95e1d3;font-weight:700;margin-bottom:6px">SOIL MOISTURE</div>';
+            html += `<div>Avg: <span style="color:var(--value)">${data.avg_soil?.toFixed(0) || '--'}</span></div>`;
+            html += `<div>Min: <span style="color:var(--value)">${data.min_soil || '--'}</span> | `;
+            html += `Max: <span style="color:var(--value)">${data.max_soil || '--'}</span></div>`;
+            html += '</div>';
+
+            html += `<div class="muted" style="text-align:center">${data.record_count || 0} records analyzed</div>`;
+            html += '</div>';
+
+            return html;
+        }
+
+        function renderActuatorHistory(data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                return '<div class="muted">No actuator history found</div>';
+            }
+
+            let html = '<table style="width:100%;border-collapse:collapse;font-family:monospace">';
+            html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--muted)">';
+            html += '<th style="padding:6px;text-align:left">Date</th>';
+            html += '<th style="padding:6px;text-align:left">Time</th>';
+            html += '<th style="padding:6px;text-align:left">Device</th>';
+            html += '<th style="padding:6px;text-align:center">State</th>';
+            html += '<th style="padding:6px;text-align:left">Trigger</th>';
+            html += '<th style="padding:6px;text-align:right">Value</th>';
+            html += '</tr>';
+
+            data.forEach(row => {
+                const stateColor = row.state === 1 ? '#2ecc71' : '#95a5a6';
+                const stateText = row.state === 1 ? 'ON' : 'OFF';
+                const timeParts = row.time.split(' ');
+                const dateStr = timeParts[0] || '--';
+                const timeStr = timeParts[1] || '--';
+
+                html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">';
+                html += `<td style="padding:6px;color:var(--muted)">${dateStr}</td>`;
+                html += `<td style="padding:6px;color:var(--muted)">${timeStr}</td>`;
+                html += `<td style="padding:6px;color:var(--value);text-transform:uppercase">${row.actuator}</td>`;
+                html += `<td style="padding:6px;text-align:center;color:${stateColor};font-weight:700">${stateText}</td>`;
+                html += `<td style="padding:6px;color:var(--muted)">${row.trigger_type || 'MANUAL'}</td>`;
+                html += `<td style="padding:6px;text-align:right;color:var(--value)">${row.trigger_value ? row.trigger_value.toFixed(1) : '--'}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</table>';
+            return html;
+        }
+
+        function closeDbResults() {
+            document.getElementById('dbResultsPanel').style.display = 'none';
+        }
+
+    </script>
+</body>
+
+</html>
